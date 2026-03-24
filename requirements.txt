@@ -39,3 +39,13 @@ python-telegram-bot==21.3
 pytz==2024.1
 python-dateutil==2.9.0
 schedule==1.2.1
+
+# ─── vectorbt dependencies (vectorbt is installed via build.sh --no-deps) ─────
+scipy
+scikit-learn
+matplotlib
+dateparser
+dill
+imageio
+ipywidgets>=7.0.0
+mypy_extensions
