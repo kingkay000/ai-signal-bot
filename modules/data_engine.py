@@ -20,12 +20,14 @@ Public API:
 
 import asyncio
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 import ccxt
 import pandas as pd
+import requests
 
 from utils.helpers import ensure_datetime_index, load_config, retry, validate_ohlcv
 from utils.logger import get_logger
@@ -46,6 +48,15 @@ MT5_TO_BYBIT: Dict[str, str] = {
     "US500": "SPX500USDT",  # S&P 500
 }
 
+MT5_TO_TWELVEDATA: Dict[str, str] = {
+    "EURUSD": "EUR/USD",
+    "GBPUSD": "GBP/USD",
+    "USDJPY": "USD/JPY",
+    "XAUUSD": "XAU/USD",  # Gold
+    "BTCUSD": "BTC/USD",
+    "US500": "SPX",
+}
+
 # Supported timeframes and their millisecond equivalents
 TF_MS: Dict[str, int] = {
     "1m": 60_000,
@@ -55,6 +66,16 @@ TF_MS: Dict[str, int] = {
     "1h": 3_600_000,
     "4h": 14_400_000,
     "1d": 86_400_000,
+}
+
+TWELVEDATA_INTERVAL_MAP: Dict[str, str] = {
+    "1m": "1min",
+    "5m": "5min",
+    "15m": "15min",
+    "30m": "30min",
+    "1h": "1h",
+    "4h": "4h",
+    "1d": "1day",
 }
 
 
@@ -88,10 +109,32 @@ class DataEngine:
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
+        self._td_session: Optional[requests.Session] = None
+        self._td_api_key: str = ""
+        self._td_last_request_at: float = 0.0
+        self._td_min_interval_seconds: float = 8.0  # free tier safety (~8 req/min)
+
         # ── Exchange credentials ──────────────────────────────────────────────
         exchange_upper = self.exchange_id.upper()
         resolved_key = api_key or os.getenv(f"{exchange_upper}_API_KEY", "")
         resolved_secret = api_secret or os.getenv(f"{exchange_upper}_API_SECRET", "")
+
+        if self.exchange_id == "twelvedata":
+            self._td_api_key = (
+                api_key
+                or os.getenv("TWELVEDATA_API_KEY", "")
+                or os.getenv("TWELVE_DATA_API_KEY", "")
+            )
+            if not self._td_api_key:
+                log.warning(
+                    "TWELVEDATA_API_KEY is not set. Twelve Data requests will fail."
+                )
+            self._td_session = requests.Session()
+            log.info(
+                f"DataEngine initialised — exchange={self.exchange_id} "
+                f"symbols={self.symbols} timeframe={self.timeframe}"
+            )
+            return
 
         exchange_cls = EXCHANGE_MAP.get(self.exchange_id)
         if exchange_cls is None:
@@ -124,10 +167,67 @@ class DataEngine:
         Bybit-style symbols expected by ccxt (e.g. EURUSDT).
         """
         if self.exchange_id != "bybit":
+            if self.exchange_id == "twelvedata":
+                raw = symbol.replace("/", "").upper()
+                return MT5_TO_TWELVEDATA.get(raw, symbol)
             return symbol
 
         raw = symbol.replace("/", "").upper()
         return MT5_TO_BYBIT.get(raw, symbol)
+
+    def _throttle_twelvedata(self) -> None:
+        """Throttle requests to respect Twelve Data free-tier pacing."""
+        now = time.time()
+        wait_for = self._td_min_interval_seconds - (now - self._td_last_request_at)
+        if wait_for > 0:
+            time.sleep(wait_for)
+        self._td_last_request_at = time.time()
+
+    def _fetch_raw_twelvedata(
+        self, symbol: str, timeframe: str, limit: int = 500
+    ) -> List[List[Any]]:
+        if not self._td_session:
+            raise RuntimeError("Twelve Data session is not initialised.")
+
+        self._throttle_twelvedata()
+        interval = TWELVEDATA_INTERVAL_MAP.get(timeframe, "1h")
+        params = {
+            "symbol": symbol,
+            "interval": interval,
+            "outputsize": min(limit, 5000),
+            "timezone": "UTC",
+            "apikey": self._td_api_key,
+        }
+        resp = self._td_session.get(
+            "https://api.twelvedata.com/time_series", params=params, timeout=30
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+
+        values = payload.get("values", [])
+        if not values:
+            return []
+
+        rows: List[List[Any]] = []
+        # Twelve Data returns newest first; reverse to oldest→newest
+        for row in reversed(values):
+            ts = int(
+                datetime.strptime(row["datetime"], "%Y-%m-%d %H:%M:%S")
+                .replace(tzinfo=timezone.utc)
+                .timestamp()
+                * 1000
+            )
+            rows.append(
+                [
+                    ts,
+                    float(row["open"]),
+                    float(row["high"]),
+                    float(row["low"]),
+                    float(row["close"]),
+                    float(row.get("volume", 0.0) or 0.0),
+                ]
+            )
+        return rows
 
     # ─── Cache Helpers ────────────────────────────────────────────────────────
 
@@ -185,6 +285,8 @@ class DataEngine:
         Returns:
             List of [timestamp, open, high, low, close, volume] rows.
         """
+        if self.exchange_id == "twelvedata":
+            return self._fetch_raw_twelvedata(symbol, timeframe, limit=limit)
         return self.exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=limit)
 
     def fetch_ohlcv(
@@ -365,6 +467,19 @@ class DataEngine:
         """
         try:
             resolved_symbol = self._normalize_symbol(symbol)
+            if self.exchange_id == "twelvedata":
+                if not self._td_session:
+                    return 0.0
+                self._throttle_twelvedata()
+                resp = self._td_session.get(
+                    "https://api.twelvedata.com/price",
+                    params={"symbol": resolved_symbol, "apikey": self._td_api_key},
+                    timeout=15,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                return float(data.get("price", 0.0))
+
             ticker = self.exchange.fetch_ticker(resolved_symbol)
             return float(ticker.get("last", 0.0))
         except Exception as exc:
@@ -397,6 +512,13 @@ class DataEngine:
         Note:
             ccxt.pro must be installed:  pip install ccxt[pro]
         """
+        if self.exchange_id == "twelvedata":
+            log.error(
+                "WebSocket streaming is not implemented for Twelve Data in this bot. "
+                "Use polling via fetch_ohlcv/get_live_price."
+            )
+            return
+
         try:
             import ccxt.pro as ccxtpro  # type: ignore[import]
         except ImportError:

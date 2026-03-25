@@ -93,7 +93,7 @@ class TradingBot:
                 self.data_engine = MT5Connector(self.config)
                 self.execution_engine = self.data_engine
             except ModuleNotFoundError as exc:
-                fallback_exchange = self.config["trading"].get("fallback_exchange", "bybit")
+                fallback_exchange = self.config["trading"].get("fallback_exchange", "twelvedata")
                 fallback_symbols = self.config["trading"].get("fallback_symbols")
                 log.warning(
                     "MetaTrader5 is not available in this environment. "
