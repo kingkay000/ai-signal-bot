@@ -85,11 +85,24 @@ class TradingBot:
             self.config["trading"]["mode"] = args.mode
 
         # Initialize Modules
-        if self.config["trading"]["exchange"] == "mt5":
-            from modules.mt5_connector import MT5Connector
+        exchange_name = self.config["trading"].get("exchange", "binance")
+        if exchange_name == "mt5":
+            try:
+                from modules.mt5_connector import MT5Connector
 
-            self.data_engine = MT5Connector(self.config)
-            self.execution_engine = self.data_engine
+                self.data_engine = MT5Connector(self.config)
+                self.execution_engine = self.data_engine
+            except ModuleNotFoundError as exc:
+                fallback_exchange = self.config["trading"].get("fallback_exchange", "bybit")
+                log.warning(
+                    "MetaTrader5 is not available in this environment. "
+                    f"Falling back to '{fallback_exchange}'. Original error: {exc}"
+                )
+                self.config["trading"]["exchange"] = fallback_exchange
+                self.data_engine = DataEngine(self.config)
+                self.execution_engine = ExecutionEngine(
+                    self.config, exchange=self.data_engine.exchange
+                )
         else:
             self.data_engine = DataEngine(self.config)
             self.execution_engine = ExecutionEngine(
