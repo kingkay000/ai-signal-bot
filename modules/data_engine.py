@@ -106,6 +106,7 @@ class DataEngine:
         self.timeframe: str = trading_cfg.get("timeframe", "1h")
         self.cache_dir: Path = Path(data_cfg.get("cache_dir", "data/cache"))
         self.cache_expiry_hours: int = data_cfg.get("cache_expiry_hours", 4)
+        self.exchange: Optional[ccxt.Exchange] = None
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -120,15 +121,30 @@ class DataEngine:
         resolved_secret = api_secret or os.getenv(f"{exchange_upper}_API_SECRET", "")
 
         if self.exchange_id == "twelvedata":
-            self._td_api_key = (
-                api_key
-                or os.getenv("TWELVEDATA_API_KEY", "")
-                or os.getenv("TWELVE_DATA_API_KEY", "")
-            )
+            td_env_candidates = [
+                "TWELVEDATA_API_KEY",
+                "TWELVE_DATA_API_KEY",
+                "TWELVEDATA_APIKEY",
+                "TWELVEDATA_KEY",
+            ]
+            env_key = ""
+            env_key_name = ""
+            for name in td_env_candidates:
+                value = os.getenv(name, "").strip()
+                if value:
+                    env_key = value
+                    env_key_name = name
+                    break
+
+            self._td_api_key = (api_key or env_key).strip()
             if not self._td_api_key:
                 log.warning(
-                    "TWELVEDATA_API_KEY is not set. Twelve Data requests will fail."
+                    "Twelve Data API key is not set. Checked: "
+                    f"{', '.join(td_env_candidates)}. Requests will fail."
                 )
+            else:
+                source = "constructor argument" if api_key else env_key_name
+                log.info(f"Twelve Data API key loaded from {source}.")
             self._td_session = requests.Session()
             log.info(
                 f"DataEngine initialised — exchange={self.exchange_id} "

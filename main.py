@@ -104,12 +104,12 @@ class TradingBot:
                     self.config["trading"]["symbols"] = fallback_symbols
                 self.data_engine = DataEngine(self.config)
                 self.execution_engine = ExecutionEngine(
-                    self.config, exchange=self.data_engine.exchange
+                    self.config, exchange=getattr(self.data_engine, "exchange", None)
                 )
         else:
             self.data_engine = DataEngine(self.config)
             self.execution_engine = ExecutionEngine(
-                self.config, exchange=self.data_engine.exchange
+                self.config, exchange=getattr(self.data_engine, "exchange", None)
             )
 
         self.indicator_engine = IndicatorEngine(self.config)
