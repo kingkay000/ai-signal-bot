@@ -318,7 +318,6 @@ class TradingBot:
             self.risk_manager.open_position(sizing)
             self.alerting_engine.notify_order_filled(order)
 
-<<<<<<< codex/fix-build-errors-for-pandas-on-render-p8fp0w
     def _get_symbol_data(self, symbol: str, timeframe: str, higher_timeframe: str) -> Any:
         """Return (df, df_htf) from EA push store when fresh; fallback to API if enabled."""
         if self.ea_data_enabled:
@@ -361,8 +360,6 @@ class TradingBot:
 
         return pd.DataFrame()
 
-=======
->>>>>>> main
     def _prune_call_timestamps(self) -> None:
         """Drop Twelve Data call estimates older than 60 seconds."""
         now = time.time()
