@@ -193,6 +193,7 @@ async def update_data(symbol: str, bundle: DataBundle, x_api_key: Optional[str] 
     return {"status": "ok", "ingested": summary}
 
 
+<<<<<<< codex/fix-build-errors-for-pandas-on-render
 @app.post("/position-events")
 async def post_position_event(event: PositionEvent, api_key: str = Security(get_api_key)):
     """Python bot posts position lifecycle events here (e.g. close events)."""
@@ -203,6 +204,8 @@ async def post_position_event(event: PositionEvent, api_key: str = Security(get_
     return {"status": "queued", "symbol": symbol, "event_type": event.event_type}
 
 
+=======
+>>>>>>> main
 # ═══════════════════════════════════════════════════════════════════════════════
 #  PUBLIC ENDPOINTS (no API key required)
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -358,7 +361,10 @@ async def health_check():
         "status": "ok",
         "uptime_seconds": int(time.time() - bot_status["server_start_time"]),
         "signals_tracked": len(latest_analysis),
+<<<<<<< codex/fix-build-errors-for-pandas-on-render
         "pending_position_event_symbols": len(pending_position_events),
+=======
+>>>>>>> main
         "data_freshness": market_data_store.freshness_report(),
     }
 
