@@ -348,17 +348,36 @@ class TradingBot:
             if df is not None and df_htf is not None and not df.empty and not df_htf.empty:
                 return df.copy(), df_htf.copy()
 
+            freshness = market_data_store.freshness_report().get(symbol.upper(), {})
+            missing_tfs = [tf for tf in (timeframe, higher_timeframe) if tf not in freshness]
+            stale_tfs: List[str] = []
+            fresh_tfs: List[str] = []
+            for tf in (timeframe, higher_timeframe):
+                tf_state = freshness.get(tf)
+                if not tf_state:
+                    continue
+                if tf_state.get("age_seconds", self.ea_data_stale_after_seconds + 1) > self.ea_data_stale_after_seconds:
+                    stale_tfs.append(f"{tf}:{tf_state.get('age_seconds')}s")
+                else:
+                    fresh_tfs.append(f"{tf}:{tf_state.get('age_seconds')}s")
+
             if not self.ea_data_fallback_to_api:
                 log.info(
-                    "EA data for %s is missing/stale (> %ss), and fallback_to_api is disabled.",
+                    "EA data unavailable for %s (missing_tfs=%s stale_tfs=%s fresh_tfs=%s, max_age=%ss), and fallback_to_api is disabled.",
                     symbol,
+                    missing_tfs,
+                    stale_tfs,
+                    fresh_tfs,
                     self.ea_data_stale_after_seconds,
                 )
                 return self._empty_df(), self._empty_df()
 
             log.info(
-                "EA data for %s is missing/stale (> %ss). Falling back to API data fetch.",
+                "EA data unavailable for %s (missing_tfs=%s stale_tfs=%s fresh_tfs=%s, max_age=%ss). Falling back to API data fetch.",
                 symbol,
+                missing_tfs,
+                stale_tfs,
+                fresh_tfs,
                 self.ea_data_stale_after_seconds,
             )
 
@@ -588,6 +607,15 @@ def main():
 
     # Configure Logging
     configure_from_config(config)
+
+    # Render web services expect a bound port; keep a tiny health endpoint open.
+    # Do this after logging setup so bind failures are visible in logs.
+    port = os.getenv("PORT")
+    if port and not args.backtest:
+        try:
+            start_health_server(int(port))
+        except Exception:
+            log.exception(f"Failed to start health server on PORT={port}")
 
     # Initialize Bot
     bot = TradingBot(config, args)
