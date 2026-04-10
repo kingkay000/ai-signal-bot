@@ -166,12 +166,18 @@ class AlertingEngine:
 
     def notify_order_filled(self, order: Any) -> None:
         """Alert on order execution."""
+        # Calculate lot size normalized to $1000 account
+        # Amount in base currency * entry price = notional value
+        notional_value = order.amount * order.price if order.price > 0 else 0
+        lot_size_per_1k = (notional_value / 1000.0) if notional_value > 0 else 0
+    
         msg = (
             f"✅ *ORDER FILLED ({order.symbol})*\n"
             f"ID: `{order.order_id}`\n"
             f"Side: `{order.side.upper()}`\n"
             f"Price: `{order.price:.4f}`\n"
-            f"Amount: `{order.amount:.6f}`\n"
+            f"Amount: `{order.amount:.6f} {order.symbol.split('/')[0]}`\n"
+            f"Lot Size: `{lot_size_per_1k:.2f}x per $1K`\n"
             f"Mode: `{'Paper' if order.is_paper else 'Live'}`"
         )
         self.send_message(msg)
