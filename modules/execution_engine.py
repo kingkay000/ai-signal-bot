@@ -223,7 +223,7 @@ class ExecutionEngine:
 
         self.paper_portfolio = PaperPortfolio(initial_balance, commission)
         self.order_history: List[OrderResult] = []
-
+        self._order_counter: int = 0  # ← ADD THIS: Move counter here!
         log.info(f"ExecutionEngine initialised — mode={self.mode}")
 
     # ─── Main Order Entry ─────────────────────────────────────────────────────
@@ -250,6 +250,10 @@ class ExecutionEngine:
         amount = sizing.position_size
         price = sizing.entry_price if sizing.entry_price > 0 else current_price
 
+        # Add fallback
+        if current_price <= 0:
+            current_price = sizing.entry_price
+      
         log.info(
             f"Placing {self.mode.upper()} {side.upper()} order: "
             f"{symbol} | size={amount:.6f} | price={price:.4f}"
@@ -257,6 +261,9 @@ class ExecutionEngine:
 
         if self.mode == "paper":
             result = self.paper_portfolio.execute(symbol, side, amount, current_price)
+            # Override the PaperPortfolio's order ID with ExecutionEngine's counter
+            self._order_counter += 1
+            result.order_id = f"PAPER-{self._order_counter:06d}"
         elif self.mode == "bridge":
             result = self._post_to_bridge(sizing, side, current_price)
         else:

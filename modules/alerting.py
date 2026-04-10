@@ -166,23 +166,30 @@ class AlertingEngine:
 
     def notify_order_filled(self, order: Any) -> None:
         """Alert on order execution."""
+        # Calculate lot size normalized to $1000 account
+        # Amount in base currency * entry price = notional value
+        notional_value = order.amount * order.price if order.price > 0 else 0
+        lot_size_per_1k = (notional_value / 1000.0) if notional_value > 0 else 0
+    
         msg = (
             f"✅ *ORDER FILLED ({order.symbol})*\n"
             f"ID: `{order.order_id}`\n"
             f"Side: `{order.side.upper()}`\n"
             f"Price: `{order.price:.4f}`\n"
-            f"Amount: `{order.amount:.6f}`\n"
+            f"Amount: `{order.amount:.6f} {order.symbol.split('/')[0]}`\n"
+            f"Lot Size: `{lot_size_per_1k:.2f}x per $1K`\n"
             f"Mode: `{'Paper' if order.is_paper else 'Live'}`"
         )
         self.send_message(msg)
 
-    def notify_position_closed(
-        self, symbol: str, pnl: float, reason: str, price: float
-    ) -> None:
+    def notify_position_closed(self, symbol: str, pnl: float, reason: str, 
+                              price: float, order_id: str = "") -> None:
         """Alert on position closure."""
         icon = "💰" if pnl >= 0 else "❌"
+        id_line = f"Order ID: `{order_id}`\n" if order_id else ""
         msg = (
             f"{icon} *POSITION CLOSED ({symbol})* {icon}\n"
+            f"{id_line}"
             f"Reason: `{reason}`\n"
             f"Exit Price: `{price:.4f}`\n"
             f"P&L: *{pnl:+.2f} USDT*"
