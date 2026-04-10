@@ -223,7 +223,7 @@ class ExecutionEngine:
 
         self.paper_portfolio = PaperPortfolio(initial_balance, commission)
         self.order_history: List[OrderResult] = []
-
+        self._order_counter: int = 0  # ← ADD THIS: Move counter here!
         log.info(f"ExecutionEngine initialised — mode={self.mode}")
 
     # ─── Main Order Entry ─────────────────────────────────────────────────────
@@ -261,6 +261,9 @@ class ExecutionEngine:
 
         if self.mode == "paper":
             result = self.paper_portfolio.execute(symbol, side, amount, current_price)
+            # Override the PaperPortfolio's order ID with ExecutionEngine's counter
+            self._order_counter += 1
+            result.order_id = f"PAPER-{self._order_counter:06d}"
         elif self.mode == "bridge":
             result = self._post_to_bridge(sizing, side, current_price)
         else:
