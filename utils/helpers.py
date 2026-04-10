@@ -212,26 +212,28 @@ def calc_position_size(
     Returns:
         Position size in LOTS (rounded to 2 decimal places).
     """
-    # 1. Internal Contract Size Management
-    sym = symbol.upper()
-    if "XAU" in sym or "GOLD" in sym:
-        contract_size = 100  # Gold (1 Lot = 100oz)
+    # 1. Normalize symbol string
+    sym = str(symbol).upper().strip()
+    
+    # 2. Robust Contract Size Logic
+    if any(keyword in sym for keyword in ["XAU", "GOLD", "XAG", "SILVER"]):
+        contract_size = 100  # Commodities
     else:
         contract_size = 100000  # Forex (1 Lot = 100,000 units)
 
-    # 2. Risk Math
+    # 3. Risk Math
     risk_amount = account_balance * risk_pct
     price_risk = abs(entry_price - stop_loss_price)
 
     if price_risk == 0:
         return 0.0
 
-    # 3. Units to Lots Calculation
+    # 4. Units to Lots Calculation
     # Formula: (Total Cash Risk / Price Difference) / Units per Lot
     total_units = risk_amount / price_risk
     lot_size = total_units / contract_size
 
-    # 4. Standard Broker Rounding
+    # 5. Standard Broker Rounding
     # Most brokers allow 0.01 (Micro Lots) as minimum
     return round(lot_size, 2)
 
