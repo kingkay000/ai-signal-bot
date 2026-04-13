@@ -27,6 +27,7 @@ Endpoints:
 """
 
 from fastapi import FastAPI, HTTPException, Security
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
@@ -41,6 +42,21 @@ app = FastAPI(
     title="Trading Bot Execution Bridge",
     description="API for trading signal distribution and bot monitoring",
     version="2.0.0",
+)
+
+# ─── CORS (browser-based debug/testing clients) ──────────────────────────────
+cors_origins_raw = os.getenv("CORS_ALLOW_ORIGINS", "*").strip()
+if cors_origins_raw == "*":
+    cors_origins = ["*"]
+else:
+    cors_origins = [origin.strip() for origin in cors_origins_raw.split(",") if origin.strip()]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=False,  # keep '*' compatible for browser debug tools
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # ─── Security ────────────────────────────────────────────────────────────────
