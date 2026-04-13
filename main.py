@@ -301,12 +301,6 @@ class TradingBot:
             }
         )
 
-        # Sync all signals to Execution Server for MT5 Dashboard
-        try:
-            self._sync_signal_to_server(signal)
-        except Exception as e:
-            log.warning(f"Failed to sync signal to server: {e}")
-
         if signal.signal == "HOLD":
             return
 
@@ -321,6 +315,12 @@ class TradingBot:
                 f"Signal rejected by RiskManager for {symbol}: {sizing.rejection_reason}"
             )
             return
+
+        # Sync only approved, actionable signals to Execution Server
+        try:
+            self._sync_signal_to_server(signal)
+        except Exception as e:
+            log.warning(f"Failed to sync signal to server: {e}")
 
         # ✅ Notify on potentially actionable signal (high confidence + risk approved)
         if signal.confidence >= 50:
