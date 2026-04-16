@@ -270,7 +270,7 @@ class ConfluenceEngine:
             return "TIER_1"
         if score >= 75:
             return "TIER_2"
-        if score >= 60:
+        if score >= 50:
             return "TIER_3"
         if score >= 40:
             return "TIER_4"
