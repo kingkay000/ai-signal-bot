@@ -266,12 +266,12 @@ class ConfluenceEngine:
         return min(score, 10)
 
     def _tier(self, score: int) -> str:
-        if score >= 90:
+        if score >= 70: #90
             return "TIER_1"
-        if score >= 75:
+        if score >= 55: #75
             return "TIER_2"
-        if score >= 50:
+        if score >= 40: #50
             return "TIER_3"
-        if score >= 40:
+        if score >= 35: #40
             return "TIER_4"
         return "NO_SIGNAL"
